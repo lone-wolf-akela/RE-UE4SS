@@ -1,6 +1,8 @@
 #include <GUI/GUI.hpp>
 
 #include <memory>
+#include <set>
+#include <tuple>
 
 #include <Profiler/Profiler.hpp>
 #include <DynamicOutput/DynamicOutput.hpp>
@@ -10,6 +12,7 @@
 #include <GUI/Dumpers.hpp>
 #include <GUI/GLFW3_OpenGL3.hpp>
 #include <GUI/Windows.hpp>
+#include <Gui/DpiHelper.hpp>
 
 #include <UE4SSProgram.hpp>
 #include <Unreal/UnrealInitializer.hpp>
@@ -17,7 +20,6 @@
 #undef TEXT
 #endif
 
-#include "Roboto.hpp"
 #include "FaSolid900.hpp"
 #include <imgui.h>
 #include <IconsFontAwesome5.h>
@@ -65,7 +67,7 @@ namespace RC::GUI
             {
                 ImGui::SaveIniSettingsToDisk(m_imgui_ini_file.c_str());
             }
-            
+
             ImGui::SetNextWindowPos({0, 0});
             auto current_window_size = m_os_backend->is_valid() ? m_os_backend->get_window_size() : m_gfx_backend->get_window_size();
             ImGui::SetNextWindowSize({static_cast<float>(current_window_size.x), static_cast<float>(current_window_size.y)});
@@ -479,21 +481,35 @@ namespace RC::GUI
 
         gui_setup_style();
         io.Fonts->Clear();
+        ImVector<ImWchar> font_ranges;
+        {
+            ImFontGlyphRangesBuilder builder;
+            builder.AddRanges(io.Fonts->GetGlyphRangesJapanese());
+            builder.AddRanges(io.Fonts->GetGlyphRangesChineseFull());
+            builder.AddRanges(io.Fonts->GetGlyphRangesKorean());
+            builder.BuildRanges(&font_ranges); // Build the final result (ordered ranges with all the unique characters submitted)
+        }
 
-        float base_font_size = 14 * UE4SSProgram::settings_manager.Debug.DebugGUIFontScaling;
+        if (UE4SSProgram::settings_manager.Debug.DebugConsoleEnabled && UE4SSProgram::settings_manager.Debug.DebugConsoleVisible)
+        {
+            setup_dpi_aware();
+        }
 
-        ImFontConfig font_cfg;
-        font_cfg.FontDataOwnedByAtlas = false; // if true it will try to free memory and fail
-        io.Fonts->AddFontFromMemoryTTF(Roboto, sizeof(Roboto), base_font_size, &font_cfg);
+        const float base_font_size = 14 * UE4SSProgram::settings_manager.Debug.DebugGUIFontScaling;
+        const float scale =  monitor_scale();
+        scale_style_to(&ImGui::GetStyle(), scale);
 
-        float icon_font_size = base_font_size * 2.0f / 3.0f; // FontAwesome fonts need to have their sizes reduced;
+        io.Fonts->AddFontFromFileTTF(R"(C:\Windows\Fonts\msyh.ttc)", base_font_size * scale, nullptr, font_ranges.Data);
+
+        float icon_font_size = base_font_size * scale * 1.0f / 2.0f; // FontAwesome fonts need to have their sizes reduced;
         static const ImWchar icons_ranges[] = {ICON_MIN_FA, ICON_MAX_16_FA, 0};
+
         ImFontConfig icons_cfg;
         icons_cfg.FontDataOwnedByAtlas = false; // if true it will try to free memory and fail
         icons_cfg.MergeMode = true;
         icons_cfg.PixelSnapH = true;
-        icons_cfg.GlyphMinAdvanceX = icon_font_size;
-        io.Fonts->AddFontFromMemoryTTF(FaSolid900, sizeof(FaSolid900), icon_font_size, &icons_cfg, icons_ranges);
+        icons_cfg.GlyphMinAdvanceX = icon_font_size * scale;
+        io.Fonts->AddFontFromMemoryTTF(FaSolid900, sizeof(FaSolid900), icon_font_size * scale, &icons_cfg, icons_ranges);
 
         m_os_backend->init();
         m_gfx_backend->init();
